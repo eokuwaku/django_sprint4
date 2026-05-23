@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -39,12 +40,14 @@ class IndexListView(ListView):
     template_name = 'blog/index.html'
     paginate_by = 10
     ordering = '-pub_date'
-    queryset = Post.objects.select_related(
-        'location', 'category', 'author'
-    ).filter(
-        is_published=True,
-        pub_date__lte=timezone.now(),
-        category__is_published=True,
+    queryset = (
+        Post.objects.select_related('location', 'category', 'author')
+        .filter(
+            is_published=True,
+            pub_date__lte=timezone.now(),
+            category__is_published=True,
+        )
+        .annotate(comment_count=Count('comments'))
     )
 
 
@@ -78,6 +81,7 @@ def category_posts(request, category_slug):
         category.posts.all()
         .select_related('location', 'author')
         .filter(is_published=True, pub_date__lte=timezone.now())
+        .annotate(comment_count=Count('comments'))
         .order_by('-pub_date')
     )
     paginator = Paginator(post_list, 10)
@@ -96,6 +100,7 @@ def profile(request, username):
     posts = (
         Post.objects.filter(author=user)
         .select_related('author', 'location', 'category')
+        .annotate(comment_count=Count('comments'))
         .order_by('-pub_date')
     )
     if request.user != user:
