@@ -35,6 +35,11 @@ class CommentFormMixin:
     template_name = 'blog/comment.html'
 
 
+class PostMixin:
+    model = Post
+    template_name = 'blog/create.html'
+
+
 class IndexListView(ListView):
     model = Post
     template_name = 'blog/index.html'
@@ -130,10 +135,8 @@ class ProfileEditView(LoginRequiredMixin, UpdateView):
         )
 
 
-class PostCreateView(LoginRequiredMixin, CreateView):
-    model = Post
+class PostCreateView(PostMixin, LoginRequiredMixin, CreateView):
     form_class = PostForm
-    template_name = 'blog/create.html'
 
     def form_valid(self, form):
         form.instance.author = self.request.user
@@ -145,10 +148,8 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         )
 
 
-class PostEditView(UpdateView):
-    model = Post
+class PostEditView(PostMixin, UpdateView):
     form_class = PostForm
-    template_name = 'blog/create.html'
 
     def post(self, request, *args, **kwargs):
         if (
@@ -162,10 +163,10 @@ class PostEditView(UpdateView):
         return reverse('blog:post_detail', kwargs={'pk': self.object.id})
 
 
-class PostDeleteView(LoginRequiredMixin, AuthorRequiredMixin, DeleteView):
-    model = Post
+class PostDeleteView(
+    PostMixin, LoginRequiredMixin, AuthorRequiredMixin, DeleteView
+):
     success_url = reverse_lazy('blog:index')
-    template_name = 'blog/create.html'
 
 
 class CommentCreateView(CommentFormMixin, LoginRequiredMixin, CreateView):
