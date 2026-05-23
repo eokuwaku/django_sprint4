@@ -28,6 +28,12 @@ class AuthorRequiredMixin:
         return super().post(request, *args, **kwargs)
 
 
+class CommentFormMixin:
+    model = Comment
+    form_class = CommentForm
+    template_name = 'blog/comment.html'
+
+
 class IndexListView(ListView):
     model = Post
     template_name = 'blog/index.html'
@@ -64,13 +70,13 @@ class PostDetailView(DetailView):
 
 
 def category_posts(request, category_slug):
-    """View-функция страницы с постами категории."""
     template_name = 'blog/category.html'
     category = get_object_or_404(
         Category, slug=category_slug, is_published=True
     )
     post_list = (
         category.posts.all()
+        .select_related('location', 'author')
         .filter(is_published=True, pub_date__lte=timezone.now())
         .order_by('-pub_date')
     )
@@ -87,7 +93,11 @@ def category_posts(request, category_slug):
 def profile(request, username):
     template_name = 'blog/profile.html'
     user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=user).order_by('-pub_date')
+    posts = (
+        Post.objects.filter(author=user)
+        .select_related('author', 'location', 'category')
+        .order_by('-pub_date')
+    )
     if request.user != user:
         posts = posts.filter(
             is_published=True,
@@ -153,34 +163,19 @@ class PostDeleteView(LoginRequiredMixin, AuthorRequiredMixin, DeleteView):
     template_name = 'blog/create.html'
 
 
-class CommentCreateView(LoginRequiredMixin, CreateView):
-    model = Comment
-    form_class = CommentForm
-    template_name = 'blog/comment.html'
-
-    # Переопределяем dispatch()
-    def dispatch(self, request, *args, **kwargs):
-        self.current_post = get_object_or_404(
-            Post,
-            pk=kwargs['pk'],
-        )
-        return super().dispatch(request, *args, **kwargs)
-
-    # Переопределяем form_valid()
+class CommentCreateView(CommentFormMixin, LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.post = self.current_post
+        form.instance.post = get_object_or_404(Post, pk=self.kwargs['pk'])
         return super().form_valid(form)
 
-    # Переопределяем get_success_url()
     def get_success_url(self):
-        return reverse('blog:post_detail', kwargs={'pk': self.current_post.id})
+        return reverse('blog:post_detail', kwargs={'pk': self.kwargs['pk']})
 
 
-class CommentEditView(LoginRequiredMixin, AuthorRequiredMixin, UpdateView):
-    model = Comment
-    form_class = CommentForm
-    template_name = 'blog/comment.html'
+class CommentEditView(
+    CommentFormMixin, LoginRequiredMixin, AuthorRequiredMixin, UpdateView
+):
     pk_url_kwarg = 'comment_id'
 
     def get_success_url(self):
